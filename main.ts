@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, Menu, Notice, ItemView, WorkspaceLeaf } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder, Menu, Notice, ItemView, WorkspaceLeaf } from 'obsidian';
 
 const VIEW_TYPE_PINNED_NOTES = 'pinned-notes-view';
 
@@ -54,24 +54,39 @@ class PinnedNotesView extends ItemView {
 		} else {
 			this.plugin.settings.pinnedFiles.forEach((filePath) => {
 				const file = this.app.vault.getAbstractFileByPath(filePath);
-				if (!file || !(file instanceof TFile)) return;
+				if (!file) return;
 
-				const item = list.createDiv({ cls: 'pinned-note-item tree-item nav-file' });
-				const itemSelf = item.createDiv({ cls: 'tree-item-self nav-file-title' });
+				const isFolder = file instanceof TFolder;
+				const item = list.createDiv({ cls: isFolder ? 'pinned-note-item tree-item nav-folder' : 'pinned-note-item tree-item nav-file' });
+				const itemSelf = item.createDiv({ cls: isFolder ? 'tree-item-self nav-folder-title' : 'tree-item-self nav-file-title' });
 				
-				// File icon
+				// Icon (different for folders vs files)
 				const icon = itemSelf.createDiv({ cls: 'tree-item-icon' });
-				icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+				if (isFolder) {
+					// Pinned folder icon (folder with emphasis)
+					icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>';
+					icon.style.color = 'var(--text-accent)';
+				} else {
+					icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+				}
 				
-				// File name
-				const fileName = file.basename;
+				// Name
+				const fileName = file.name;
 				itemSelf.createDiv({ cls: 'tree-item-inner nav-file-title-content', text: fileName });
 
-				// Click to open
+				// Click to open/reveal
 				itemSelf.addEventListener('click', async (e) => {
 					e.preventDefault();
-					const leaf = this.app.workspace.getLeaf(e.ctrlKey || e.metaKey);
-					await leaf.openFile(file);
+					if (isFolder) {
+						// Reveal folder in file explorer
+						const fileExplorer = this.app.workspace.getLeavesOfType('file-explorer')[0];
+						if (fileExplorer) {
+							(fileExplorer.view as any).revealInFolder(file);
+						}
+					} else {
+						const leaf = this.app.workspace.getLeaf(e.ctrlKey || e.metaKey);
+						await leaf.openFile(file as TFile);
+					}
 				});
 
 				// Right-click for context menu
@@ -88,15 +103,17 @@ class PinnedNotesView extends ItemView {
 							});
 					});
 
-					menu.addItem((item) => {
-						item
-							.setTitle('Open in new tab')
-							.setIcon('file-plus')
-							.onClick(async () => {
-								const newLeaf = this.app.workspace.getLeaf('tab');
-								await newLeaf.openFile(file);
-							});
-					});
+					if (!isFolder) {
+						menu.addItem((item) => {
+							item
+								.setTitle('Open in new tab')
+								.setIcon('file-plus')
+								.onClick(async () => {
+									const newLeaf = this.app.workspace.getLeaf('tab');
+									await newLeaf.openFile(file as TFile);
+								});
+						});
+					}
 
 					menu.showAtMouseEvent(e);
 				});
@@ -155,17 +172,15 @@ export default class PinNotesPlugin extends Plugin {
 		// Add context menu option
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
-				if (file instanceof TFile) {
-					const isPinned = this.settings.pinnedFiles.includes(file.path);
-					menu.addItem((item) => {
-						item
-							.setTitle(isPinned ? 'Unpin from Pinned Notes' : 'Pin to Pinned Notes')
-							.setIcon(isPinned ? 'pin-off' : 'pin')
-							.onClick(() => {
-								this.togglePin(file.path);
-							});
-					});
-				}
+				const isPinned = this.settings.pinnedFiles.includes(file.path);
+				menu.addItem((item) => {
+					item
+						.setTitle(isPinned ? 'Unpin from Pinned Notes' : 'Pin to Pinned Notes')
+						.setIcon(isPinned ? 'pin-off' : 'pin')
+						.onClick(() => {
+							this.togglePin(file.path);
+						});
+				});
 			})
 		);
 
