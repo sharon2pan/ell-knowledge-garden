@@ -2,6 +2,8 @@ import { App, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder, 
 
 const VIEW_TYPE_PINNED_NOTES = 'pinned-notes-view';
 
+const test = 'pinned-notes-view';
+
 interface PinNotesSettings {
 	pinnedFiles: string[];
 }
