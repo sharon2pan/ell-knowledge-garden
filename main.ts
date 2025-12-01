@@ -1,5 +1,6 @@
 import { Plugin } from 'obsidian';
 import { initializePinnedNotes } from './pinned-notes';
+import { initializePopupWindow } from './popup-window';
 import { ELLKnowledgeBuilderPluginSettings, DEFAULT_SETTINGS, ELLKnowledgeBuilderPluginSettingsTab } from './settings';
 
 export default class MyPlugin extends Plugin {
@@ -10,6 +11,9 @@ export default class MyPlugin extends Plugin {
 
 		// Initialize pinned notes feature
 		initializePinnedNotes(this, this.settings, this.saveSettings.bind(this));
+
+		// Initialize popup window feature
+		initializePopupWindow(this, this.settings, this.saveSettings.bind(this));
 
 		// Initialize other features here
 		// initializeFeature2(this, this.settings, this.saveSettings.bind(this));
