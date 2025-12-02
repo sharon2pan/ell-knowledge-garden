@@ -9,17 +9,22 @@ import {
 interface PinnedMessagesSettings {
     messagesFolder: string;   // folder that holds the pinned messages/notes
     showOnStartup: boolean;   // show pinned messages automatically when vault opens
+    autoDeleteEnabled: boolean; // automatically delete messages after a certain time
+    autoDeleteHours: number;    // number of hours before auto-deleting (default 24)
 }
 
 const DEFAULT_SETTINGS: PinnedMessagesSettings = {
     messagesFolder: "PinnedMessages",
     showOnStartup: true,
+    autoDeleteEnabled: true,
+    autoDeleteHours: 24,
 };
 
 interface PinnedMessage {
     title: string;
     content: string;
     path: string;
+    fileCreated: number;
 }
 
 export default class PinnedMessagesPlugin extends Plugin {
@@ -91,6 +96,7 @@ export default class PinnedMessagesPlugin extends Plugin {
                 title: file.basename,
                 content,
                 path: file.path,
+                fileCreated: file.stat.ctime,
             });
         }
 
@@ -110,6 +116,16 @@ export default class PinnedMessagesPlugin extends Plugin {
 
         new PinnedMessagesModal(this.app, messages).open();
     }
+
+    private async deleteMessage(filePath: string) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (file instanceof TFile) {
+            await this.app.vault.delete(file);
+            new Notice(`Deleted message: ${file.basename}`);
+        } else {
+            new Notice("File not found.");
+        }
+    }
 } // end of plugin class
 
 // modal class (the popup window)
@@ -117,11 +133,13 @@ export default class PinnedMessagesPlugin extends Plugin {
 class PinnedMessagesModal extends Modal {
     private messages: PinnedMessage[];
     private index: number;
+    private autoDeleteHours: number;
 
-    constructor(app: App, messages: PinnedMessage[]) {
+    constructor(app: App, messages: PinnedMessage[], autoDeleteHours: number = 24) {
         super(app);
         this.messages = messages;
         this.index = 0;
+        this.autoDeleteHours = autoDeleteHours;
     }
 
     onOpen() {
@@ -141,10 +159,26 @@ class PinnedMessagesModal extends Modal {
         container.empty();
 
         const message = this.messages[this.index];
+        
         // title
         const header = container.createDiv({ cls: "pinned-message-header" });
         header.createEl("h3", {
             text: `${this.index + 1} / ${this.messages.length}: ${message.title}`,
+        });
+
+        // timestamps
+        const timestamps = container.createDiv({ cls: "pinned-message-timestamps" });
+        const createdDate = new Date(message.fileCreated);
+        // Calculate deletion time: created time + (hours * 60 minutes * 60 seconds * 1000 milliseconds)
+        const deleteDate = new Date(message.fileCreated + (this.autoDeleteHours * 60 * 60 * 1000));
+        
+        timestamps.createEl("p", { 
+            text: `Created: ${createdDate.toLocaleString()}`,
+            cls: "timestamp-line"
+        });
+        timestamps.createEl("p", { 
+            text: `Will be deleted: ${deleteDate.toLocaleString()}`,
+            cls: "timestamp-line"
         });
 
         // body
@@ -208,6 +242,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
                 title: file.basename,
                 content,
                 path: file.path,
+                fileCreated: file.stat.ctime,
             });
         }
 
@@ -215,8 +250,40 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         return messages;
     };
 
+    // Helper function to delete expired messages
+    const deleteExpiredMessages = async () => {
+        if (!popupSettings.autoDeleteEnabled) {
+            return;
+        }
+
+        const folderPath = popupSettings.messagesFolder.replace(/\/+$/, "");
+        const allMarkdown = plugin.app.vault.getMarkdownFiles();
+        const files = allMarkdown.filter((file) =>
+            file.path.startsWith(folderPath + "/")
+        );
+
+        const now = Date.now();
+        const expirationTime = popupSettings.autoDeleteHours * 60 * 60 * 1000; // Convert hours to milliseconds
+        let deletedCount = 0;
+
+        for (const file of files) {
+            const age = now - file.stat.ctime;
+            if (age > expirationTime) {
+                await plugin.app.vault.delete(file);
+                deletedCount++;
+            }
+        }
+
+        if (deletedCount > 0) {
+            new Notice(`Auto-deleted ${deletedCount} expired message(s)`);
+        }
+    };
+
     // Helper function to show messages
     const showMessages = async () => {
+        // Clean up expired messages before showing
+        await deleteExpiredMessages();
+        
         const messages = await loadMessages();
 
         if (messages.length === 0) {
@@ -224,7 +291,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
             return;
         }
 
-        new PinnedMessagesModal(plugin.app, messages).open();
+        new PinnedMessagesModal(plugin.app, messages, popupSettings.autoDeleteHours).open();
     };
 
     // Add command to open pinned messages
@@ -240,6 +307,11 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
     if (popupSettings.showOnStartup) {
         plugin.app.workspace.onLayoutReady(() => {
             showMessages();
+        });
+    } else if (popupSettings.autoDeleteEnabled) {
+        // Even if not showing on startup, still clean up expired messages
+        plugin.app.workspace.onLayoutReady(() => {
+            deleteExpiredMessages();
         });
     }
 }
