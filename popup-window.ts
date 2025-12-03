@@ -11,6 +11,7 @@ interface PinnedMessagesSettings {
     showOnStartup: boolean;   // show pinned messages automatically when vault opens
     autoDeleteEnabled: boolean; // automatically delete messages after a certain time
     autoDeleteHours: number;    // number of hours before auto-deleting (default 24)
+    oldPopupsRetentionDays: number; // days to keep items in Old Popups before deleting
 }
 
 const DEFAULT_SETTINGS: PinnedMessagesSettings = {
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: PinnedMessagesSettings = {
     showOnStartup: true,
     autoDeleteEnabled: true,
     autoDeleteHours: 24,
+    oldPopupsRetentionDays: 14,
 };
 
 interface PinnedMessage {
@@ -269,6 +271,8 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         settings?.popupWindow || {}
     );
 
+    const OLD_POPUPS_FOLDER = "Old Popups";
+
     // Helper function to load messages
     const loadMessages = async (): Promise<PinnedMessage[]> => {
         const folderPath = popupSettings.messagesFolder.replace(/\/+$/, "");
@@ -307,27 +311,77 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
 
         const now = Date.now();
         const expirationTime = popupSettings.autoDeleteHours * 60 * 60 * 1000; // Convert hours to milliseconds
-        let deletedCount = 0;
+        let movedCount = 0;
 
         for (const file of files) {
             const age = now - file.stat.ctime;
             if (age > expirationTime) {
+                // Ensure Old Popups folder exists
+                const oldFolder = plugin.app.vault.getAbstractFileByPath(OLD_POPUPS_FOLDER);
+                if (!oldFolder) {
+                    await plugin.app.vault.createFolder(OLD_POPUPS_FOLDER);
+                }
+
+                // Move the file to Old Popups
+                const newPath = `${OLD_POPUPS_FOLDER}/${file.basename}.md`;
+                await plugin.app.vault.rename(file, newPath);
+
+                // Append a marker to update mtime and record when it was moved
+                const movedAt = new Date().toISOString();
+                const movedNotice = `\n\n> Moved to Old Popups on ${movedAt}`;
+                const movedFile = plugin.app.vault.getAbstractFileByPath(newPath);
+                if (movedFile instanceof TFile) {
+                    const current = await plugin.app.vault.read(movedFile);
+                    const autoDeleteOn = new Date(Date.now() + ((popupSettings.oldPopupsRetentionDays ?? 14) * 24 * 60 * 60 * 1000)).toLocaleString();
+                    const headerLine = `> This popup will be auto-deleted on ${autoDeleteOn}`;
+                    const updated = `${headerLine}\n\n${current}${movedNotice}`;
+                    await plugin.app.vault.modify(movedFile, updated);
+                }
+
+                // Optionally remove paired SeenMessages copy to reduce clutter
                 const seenFile = plugin.app.vault.getAbstractFileByPath(`SeenMessages/${file.basename}.md`);
+                if (seenFile instanceof TFile) {
+                    await plugin.app.vault.delete(seenFile);
+                }
+
+                movedCount++;
+            }
+        }
+
+        if (movedCount > 0) {
+            new Notice(`Moved ${movedCount} expired message(s) to Old Popups`);
+        }
+    };
+
+    // Helper function to delete old popups after two weeks
+    const deleteOldPopups = async () => {
+        const retentionMs = (popupSettings.oldPopupsRetentionDays ?? 14) * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const oldFolder = plugin.app.vault.getAbstractFileByPath(OLD_POPUPS_FOLDER);
+        if (!oldFolder) return;
+
+        const allMarkdown = plugin.app.vault.getMarkdownFiles();
+        const files = allMarkdown.filter((file) => file.path.startsWith(`${OLD_POPUPS_FOLDER}/`));
+
+        let deletedCount = 0;
+        for (const file of files) {
+            const ageSinceModify = now - file.stat.mtime;
+            if (ageSinceModify > retentionMs) {
                 await plugin.app.vault.delete(file);
-                if (seenFile) await plugin.app.vault.delete(seenFile);
                 deletedCount++;
             }
         }
 
         if (deletedCount > 0) {
-            new Notice(`Auto-deleted ${deletedCount} expired message(s)`);
+            new Notice(`Auto-deleted ${deletedCount} old popup(s)`);
         }
     };
 
     // Helper function to show messages
     const showMessages = async () => {
-        // Clean up expired messages before showing
-        await deleteExpiredMessages();
+    // Clean up expired messages before showing
+    await deleteExpiredMessages();
+    await deleteOldPopups();
         
         const messages = await loadMessages();
 
@@ -357,6 +411,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         // Even if not showing on startup, still clean up expired messages
         plugin.app.workspace.onLayoutReady(() => {
             deleteExpiredMessages();
+            deleteOldPopups();
         });
     }
 }

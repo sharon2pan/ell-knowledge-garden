@@ -10,6 +10,7 @@ export interface ELLKnowledgeBuilderPluginSettings {
 		showOnStartup: boolean;
 		autoDeleteEnabled: boolean;
 		autoDeleteHours: number;
+		oldPopupsRetentionDays: number;
 	};
 }
 
@@ -20,6 +21,7 @@ export const DEFAULT_SETTINGS: ELLKnowledgeBuilderPluginSettings = {
 		showOnStartup: true,
 		autoDeleteEnabled: true,
 		autoDeleteHours: 24,
+		oldPopupsRetentionDays: 14,
 	},
 }
 
@@ -144,6 +146,20 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 					const hours = parseFloat(value);
 					if (!isNaN(hours) && hours > 0) {
 						this.plugin.settings.popupWindow.autoDeleteHours = hours;
+						await (this.plugin as any).saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('Retention in Old Popups (days)')
+			.setDesc('After this many days, items in Old Popups are auto-deleted')
+			.addText(text => text
+				.setPlaceholder('14')
+				.setValue(String(this.plugin.settings.popupWindow.oldPopupsRetentionDays))
+				.onChange(async (value) => {
+					const days = parseInt(value, 10);
+					if (!isNaN(days) && days > 0) {
+						this.plugin.settings.popupWindow.oldPopupsRetentionDays = days;
 						await (this.plugin as any).saveSettings();
 					}
 				}));
