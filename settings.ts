@@ -1,8 +1,8 @@
 import { App, PluginSettingTab, Setting, Plugin } from 'obsidian';
 
 export interface ELLKnowledgeBuilderPluginSettings {
-	// List of pinned notes 
 	pinnedFiles: string[];
+	shiftHandoff?: any;  // Add this line
 }
 
 export const DEFAULT_SETTINGS: ELLKnowledgeBuilderPluginSettings = {
@@ -23,11 +23,7 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', {text: 'Plugin Settings'});
 
-        // TO CREATE A HEADER: containerEl.createEl('h3', {text: 'Replace with name of feature'});
-
-        /* =============== PINNED NOTES =============== */
-
-        containerEl.createEl('h3', {text: 'Pinned Notes'});
+		containerEl.createEl('h3', {text: 'Pinned Notes'});
 		
 		new Setting(containerEl)
 			.setName('Pinned files')
@@ -58,7 +54,6 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 				removeButton.onclick = async () => {
 					this.plugin.settings.pinnedFiles.splice(index, 1);
 					await (this.plugin as any).saveSettings();
-					// Refresh the pinned notes view
 					const leaves = this.plugin.app.workspace.getLeavesOfType('pinned-notes-view');
 					leaves.forEach((leaf) => {
 						(leaf.view as any).render();
@@ -76,7 +71,6 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 					.onClick(async () => {
 						this.plugin.settings.pinnedFiles = [];
 						await (this.plugin as any).saveSettings();
-						// Refresh the pinned notes view
 						const leaves = this.plugin.app.workspace.getLeavesOfType('pinned-notes-view');
 						leaves.forEach((leaf) => {
 							(leaf.view as any).render();
@@ -85,10 +79,11 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 					}));
 		}
 
-        /* =============== ADD NEXT FEATURE NAME =============== */
-
-		// Add other feature settings sections here
-		// containerEl.createEl('h3', {text: 'Feature 2'});
-		// ... more settings ...
+		/* =============== SHIFT HANDOFF =============== */
+		containerEl.createEl('h3', {text: 'Shift Handoff'});
+		containerEl.createEl('p', {
+			text: 'Use the command palette (Ctrl+P) to clock in/out and manage lab members.',
+			cls: 'setting-item-description'
+		});
 	}
 }
