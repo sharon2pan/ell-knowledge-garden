@@ -327,7 +327,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
                 await plugin.app.vault.rename(file, newPath);
 
                 // Append a marker to update mtime and record when it was moved
-                const movedAt = new Date().toISOString();
+                const movedAt = new Date().toLocaleString();
                 const movedNotice = `\n\n> Moved to Old Popups on ${movedAt}`;
                 const movedFile = plugin.app.vault.getAbstractFileByPath(newPath);
                 if (movedFile instanceof TFile) {
