@@ -168,22 +168,24 @@ class PinnedMessagesModal extends Modal {
 
         // timestamps
         const timestamps = container.createDiv({ cls: "pinned-message-timestamps" });
-        const createdDate = new Date(message.fileCreated);
         // Calculate deletion time: created time + (hours * 60 minutes * 60 seconds * 1000 milliseconds)
         const deleteDate = new Date(message.fileCreated + (this.autoDeleteHours * 60 * 60 * 1000));
         
         timestamps.createEl("p", { 
-            text: `Created: ${createdDate.toLocaleString()}`,
-            cls: "timestamp-line"
-        });
-        timestamps.createEl("p", { 
-            text: `Will be deleted: ${deleteDate.toLocaleString()}`,
+            text: `Expiring On: ${deleteDate.toLocaleString()}`,
             cls: "timestamp-line"
         });
 
         // body
         const body = container.createDiv({ cls: "pinned-message-body" });
-        body.createEl("pre", { text: message.content });
+        const pre = body.createEl("pre", { text: message.content });
+        
+        // Ensure text wraps and stays within bounds
+        pre.style.whiteSpace = "pre-wrap";
+        pre.style.wordWrap = "break-word";
+        pre.style.overflowWrap = "break-word";
+        pre.style.maxWidth = "100%";
+        pre.style.overflow = "auto";
 
         // controls container
         const controls = container.createDiv({ cls: "pinned-message-controls" });
@@ -208,12 +210,53 @@ class PinnedMessagesModal extends Modal {
         // open button
         const openButton = controls.createEl("button", { text: "Open Message" });
         openButton.onclick = () => {
+            console.log("Opening file:", message.path);
             const file = this.app.vault.getAbstractFileByPath(message.path);
             if (file instanceof TFile) {
                 this.app.workspace.getLeaf().openFile(file);
             }
         };
 
+        // mark as seen button
+        const markAsSeenButton = controls.createEl("button", { text: "Mark as Seen" });
+        markAsSeenButton.onclick = async () => {
+            // Path to the template file
+            const templatePath = "Have you seen this popup?.md";
+            const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
+            
+            if (!(templateFile instanceof TFile)) {
+                new Notice("Template file 'Have you seen this popup?.md' not found.");
+                return;
+            }
+            
+            // Read the template content
+            const templateContent = await this.app.vault.read(templateFile);
+            
+            // Create a copy with timestamp
+            const seenFolderPath = "SeenMessages";
+            const currentMessageTitle = message.title.replace(/[/\\?%*:|"<>]/g, '-'); // sanitize title for filename
+            const newPath = `${seenFolderPath}/${currentMessageTitle}.md`;
+            
+            // Create the SeenMessages folder if it doesn't exist
+            const seenFolder = this.app.vault.getAbstractFileByPath(seenFolderPath);
+            if (!seenFolder) {
+                await this.app.vault.createFolder(seenFolderPath);
+            }
+            
+            const seenFile = this.app.vault.getAbstractFileByPath(newPath);
+            if (!seenFile) {
+                // Add a link to the current message at the beginning of the template
+                const linkToMessage = `Link to message: [[${message.path}|${message.title}]]\n\n`;
+                const fileContent = linkToMessage + templateContent;
+                
+                // Create the copy of the template
+                await this.app.vault.create(newPath, fileContent);
+            }
+
+            if (seenFile instanceof TFile) {
+                this.app.workspace.getLeaf().openFile(seenFile);
+            }
+        };
     }
 }
 
@@ -269,7 +312,9 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         for (const file of files) {
             const age = now - file.stat.ctime;
             if (age > expirationTime) {
+                const seenFile = plugin.app.vault.getAbstractFileByPath(`SeenMessages/${file.basename}.md`);
                 await plugin.app.vault.delete(file);
+                if (seenFile) await plugin.app.vault.delete(seenFile);
                 deletedCount++;
             }
         }
