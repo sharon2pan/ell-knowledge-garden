@@ -1,8 +1,227 @@
-/*
+/* ============================================================
+   LAB DASHBOARD STYLES
+   ============================================================ */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.lab-dashboard-container {
+    padding: 12px;
+    height: 100%;
+    overflow-y: auto;
+}
 
-If your plugin does not need CSS, delete this file.
+.lab-dashboard-header {
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 12px;
+}
 
-*/
+.lab-dashboard-header h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-normal);
+}
+
+.lab-dashboard-section {
+    margin-bottom: 20px;
+}
+
+.lab-dashboard-section h5 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lab-dashboard-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Currently Active List */
+.lab-dashboard-active-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.lab-dashboard-active-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+    border-left: 3px solid var(--color-green);
+}
+
+.lab-dashboard-active-item.is-current-user {
+    background: var(--background-modifier-hover);
+    border-left-color: var(--interactive-accent);
+}
+
+.lab-dashboard-active-item .lab-dashboard-name {
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.lab-dashboard-active-item .lab-dashboard-time {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-monospace);
+}
+
+/* Stats Table */
+.lab-dashboard-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.lab-dashboard-stat-row {
+    display: grid;
+    grid-template-columns: 20px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.lab-dashboard-stat-row:hover {
+    background: var(--background-modifier-hover);
+}
+
+.lab-dashboard-stat-row.is-current-user {
+    background: var(--background-secondary);
+}
+
+.lab-dashboard-stat-row .lab-dashboard-status {
+    font-size: 10px;
+}
+
+.lab-dashboard-stat-row .lab-dashboard-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lab-dashboard-stat-row .lab-dashboard-total {
+    font-family: var(--font-monospace);
+    font-size: 12px;
+    color: var(--text-accent);
+    font-weight: 600;
+}
+
+.lab-dashboard-stat-row .lab-dashboard-sessions {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 50px;
+    text-align: right;
+}
+
+/* Recent Activity */
+.lab-dashboard-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.lab-dashboard-recent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+.lab-dashboard-recent-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.lab-dashboard-recent-item .lab-dashboard-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.lab-dashboard-recent-item .lab-dashboard-when {
+    color: var(--text-muted);
+}
+
+.lab-dashboard-recent-item .lab-dashboard-has-note {
+    cursor: help;
+}
+
+/* Quick Actions */
+.lab-dashboard-actions {
+    padding-top: 12px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.lab-dashboard-btn {
+    width: 100%;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* ============================================================
+   SHIFT HANDOFF MODAL STYLES
+   ============================================================ */
+
+.shift-handoff-modal {
+    max-width: 500px;
+}
+
+.shift-handoff-modal h4 {
+    margin: 16px 0 8px 0;
+    font-size: 14px;
+    color: var(--text-normal);
+}
+
+.shift-handoff-modal h4:first-child {
+    margin-top: 8px;
+}
+
+.shift-handoff-modal textarea {
+    width: 100% !important;
+    min-height: 60px;
+    resize: vertical;
+}
+
+/* ============================================================
+   HANDOFF PREVIEW STYLES (for Recent Handoffs modal)
+   ============================================================ */
+
+.handoff-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--background-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.handoff-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.handoff-item h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+
+.handoff-preview {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    overflow: hidden;
+    max-height: 80px;
+}

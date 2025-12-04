@@ -1,6 +1,7 @@
 import { Plugin } from 'obsidian';
 import { initializePinnedNotes } from './pinned-notes';
 import { initializePopupWindow } from './popup-window';
+import { initializeShiftHandoff } from './shift-handoff';
 import { ELLKnowledgeBuilderPluginSettings, DEFAULT_SETTINGS, ELLKnowledgeBuilderPluginSettingsTab } from './settings';
 
 export default class MyPlugin extends Plugin {
@@ -15,9 +16,8 @@ export default class MyPlugin extends Plugin {
 		// Initialize popup window feature
 		initializePopupWindow(this, this.settings, this.saveSettings.bind(this));
 
-		// Initialize other features here
-		// initializeFeature2(this, this.settings, this.saveSettings.bind(this));
-		// initializeFeature3(this, this.settings, this.saveSettings.bind(this));
+		// Initialize shift handoff feature
+		initializeShiftHandoff(this, this.settings, this.saveSettings.bind(this));
 
 		this.addSettingTab(new ELLKnowledgeBuilderPluginSettingsTab(this.app, this));
 	}
