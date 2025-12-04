@@ -98,7 +98,7 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 		/* =============== SHIFT HANDOFF =============== */
 		
     containerEl.createEl('h3', {text: 'Shift Handoff'});
-		containerEl.createEl('p', {
+		containerEl.createEl('h2', {
 			text: 'Use the command palette (Ctrl+P) to clock in/out and manage lab members.',
 			cls: 'setting-item-description'
 		});

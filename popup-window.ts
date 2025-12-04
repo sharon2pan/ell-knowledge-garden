@@ -4,6 +4,8 @@ import {
     Notice,
     Plugin,
     TFile,
+    MarkdownRenderer,
+    Component,
 } from "obsidian";
 
 interface PinnedMessagesSettings {
@@ -157,7 +159,7 @@ class PinnedMessagesModal extends Modal {
         this.renderMessage(contentEl);
     }
 
-    private renderMessage(container: HTMLElement) {
+    private async renderMessage(container: HTMLElement) {
         container.empty();
 
         const message = this.messages[this.index];
@@ -178,16 +180,20 @@ class PinnedMessagesModal extends Modal {
             cls: "timestamp-line"
         });
 
-        // body
+        // body (render markdown so [[links]] work)
         const body = container.createDiv({ cls: "pinned-message-body" });
-        const pre = body.createEl("pre", { text: message.content });
-        
-        // Ensure text wraps and stays within bounds
-        pre.style.whiteSpace = "pre-wrap";
-        pre.style.wordWrap = "break-word";
-        pre.style.overflowWrap = "break-word";
-        pre.style.maxWidth = "100%";
-        pre.style.overflow = "auto";
+
+        // create a small Component just for markdown rendering
+        const mdComponent = new Component();
+
+        // Use markdown renderer so [[links]] and other markdown work
+        await MarkdownRenderer.render(
+            this.app,
+            message.content,   // markdown text
+            body,              // container element
+            message.path,      // source path so [[links]] resolve correctly
+            mdComponent        // component context for event handling
+        );
 
         // controls container
         const controls = container.createDiv({ cls: "pinned-message-controls" });
