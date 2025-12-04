@@ -3,10 +3,26 @@ import { App, PluginSettingTab, Setting, Plugin } from 'obsidian';
 export interface ELLKnowledgeBuilderPluginSettings {
 	// List of pinned notes 
 	pinnedFiles: string[];
+	
+	// Popup window settings
+	popupWindow: {
+		messagesFolder: string;
+		showOnStartup: boolean;
+		autoDeleteEnabled: boolean;
+		autoDeleteHours: number;
+		oldPopupsRetentionDays: number;
+	};
 }
 
 export const DEFAULT_SETTINGS: ELLKnowledgeBuilderPluginSettings = {
 	pinnedFiles: [],
+	popupWindow: {
+		messagesFolder: "PinnedMessages",
+		showOnStartup: true,
+		autoDeleteEnabled: true,
+		autoDeleteHours: 24,
+		oldPopupsRetentionDays: 14,
+	},
 }
 
 export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
@@ -84,6 +100,69 @@ export class ELLKnowledgeBuilderPluginSettingsTab extends PluginSettingTab {
 						this.display();
 					}));
 		}
+
+        /* =============== POPUP WINDOW =============== */
+
+        containerEl.createEl('h3', {text: 'Popup Window Messages'});
+
+		new Setting(containerEl)
+			.setName('Messages folder')
+			.setDesc('Folder containing pinned messages to display')
+			.addText(text => text
+				.setPlaceholder('PinnedMessages')
+				.setValue(this.plugin.settings.popupWindow.messagesFolder)
+				.onChange(async (value) => {
+					this.plugin.settings.popupWindow.messagesFolder = value;
+					await (this.plugin as any).saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show on startup')
+			.setDesc('Automatically show pinned messages when vault opens')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.popupWindow.showOnStartup)
+				.onChange(async (value) => {
+					this.plugin.settings.popupWindow.showOnStartup = value;
+					await (this.plugin as any).saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto-delete messages')
+			.setDesc('Automatically delete messages after a certain time')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.popupWindow.autoDeleteEnabled)
+				.onChange(async (value) => {
+					this.plugin.settings.popupWindow.autoDeleteEnabled = value;
+					await (this.plugin as any).saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Auto-delete time (hours)')
+			.setDesc('Number of hours before messages are automatically deleted')
+			.addText(text => text
+				.setPlaceholder('24')
+				.setValue(String(this.plugin.settings.popupWindow.autoDeleteHours))
+				.onChange(async (value) => {
+					const hours = parseFloat(value);
+					if (!isNaN(hours) && hours > 0) {
+						this.plugin.settings.popupWindow.autoDeleteHours = hours;
+						await (this.plugin as any).saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('Retention in Old Popups (days)')
+			.setDesc('After this many days, items in Old Popups are auto-deleted')
+			.addText(text => text
+				.setPlaceholder('14')
+				.setValue(String(this.plugin.settings.popupWindow.oldPopupsRetentionDays))
+				.onChange(async (value) => {
+					const days = parseInt(value, 10);
+					if (!isNaN(days) && days > 0) {
+						this.plugin.settings.popupWindow.oldPopupsRetentionDays = days;
+						await (this.plugin as any).saveSettings();
+					}
+				}));
 
         /* =============== ADD NEXT FEATURE NAME =============== */
 

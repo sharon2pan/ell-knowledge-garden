@@ -9,17 +9,24 @@ import {
 interface PinnedMessagesSettings {
     messagesFolder: string;   // folder that holds the pinned messages/notes
     showOnStartup: boolean;   // show pinned messages automatically when vault opens
+    autoDeleteEnabled: boolean; // automatically delete messages after a certain time
+    autoDeleteHours: number;    // number of hours before auto-deleting (default 24)
+    oldPopupsRetentionDays: number; // days to keep items in Old Popups before deleting
 }
 
 const DEFAULT_SETTINGS: PinnedMessagesSettings = {
     messagesFolder: "PinnedMessages",
     showOnStartup: true,
+    autoDeleteEnabled: true,
+    autoDeleteHours: 24,
+    oldPopupsRetentionDays: 14,
 };
 
 interface PinnedMessage {
     title: string;
     content: string;
     path: string;
+    fileCreated: number;
 }
 
 export default class PinnedMessagesPlugin extends Plugin {
@@ -91,6 +98,7 @@ export default class PinnedMessagesPlugin extends Plugin {
                 title: file.basename,
                 content,
                 path: file.path,
+                fileCreated: file.stat.ctime,
             });
         }
 
@@ -110,6 +118,16 @@ export default class PinnedMessagesPlugin extends Plugin {
 
         new PinnedMessagesModal(this.app, messages).open();
     }
+
+    private async deleteMessage(filePath: string) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+        if (file instanceof TFile) {
+            await this.app.vault.delete(file);
+            new Notice(`Deleted message: ${file.basename}`);
+        } else {
+            new Notice("File not found.");
+        }
+    }
 } // end of plugin class
 
 // modal class (the popup window)
@@ -117,11 +135,13 @@ export default class PinnedMessagesPlugin extends Plugin {
 class PinnedMessagesModal extends Modal {
     private messages: PinnedMessage[];
     private index: number;
+    private autoDeleteHours: number;
 
-    constructor(app: App, messages: PinnedMessage[]) {
+    constructor(app: App, messages: PinnedMessage[], autoDeleteHours: number = 24) {
         super(app);
         this.messages = messages;
         this.index = 0;
+        this.autoDeleteHours = autoDeleteHours;
     }
 
     onOpen() {
@@ -141,15 +161,33 @@ class PinnedMessagesModal extends Modal {
         container.empty();
 
         const message = this.messages[this.index];
+        
         // title
         const header = container.createDiv({ cls: "pinned-message-header" });
         header.createEl("h3", {
             text: `${this.index + 1} / ${this.messages.length}: ${message.title}`,
         });
 
+        // timestamps
+        const timestamps = container.createDiv({ cls: "pinned-message-timestamps" });
+        // Calculate deletion time: created time + (hours * 60 minutes * 60 seconds * 1000 milliseconds)
+        const deleteDate = new Date(message.fileCreated + (this.autoDeleteHours * 60 * 60 * 1000));
+        
+        timestamps.createEl("p", { 
+            text: `Expiring On: ${deleteDate.toLocaleString()}`,
+            cls: "timestamp-line"
+        });
+
         // body
         const body = container.createDiv({ cls: "pinned-message-body" });
-        body.createEl("pre", { text: message.content });
+        const pre = body.createEl("pre", { text: message.content });
+        
+        // Ensure text wraps and stays within bounds
+        pre.style.whiteSpace = "pre-wrap";
+        pre.style.wordWrap = "break-word";
+        pre.style.overflowWrap = "break-word";
+        pre.style.maxWidth = "100%";
+        pre.style.overflow = "auto";
 
         // controls container
         const controls = container.createDiv({ cls: "pinned-message-controls" });
@@ -174,12 +212,53 @@ class PinnedMessagesModal extends Modal {
         // open button
         const openButton = controls.createEl("button", { text: "Open Message" });
         openButton.onclick = () => {
+            console.log("Opening file:", message.path);
             const file = this.app.vault.getAbstractFileByPath(message.path);
             if (file instanceof TFile) {
                 this.app.workspace.getLeaf().openFile(file);
             }
         };
 
+        // mark as seen button
+        const markAsSeenButton = controls.createEl("button", { text: "Mark as Seen" });
+        markAsSeenButton.onclick = async () => {
+            // Path to the template file
+            const templatePath = "Have you seen this popup?.md";
+            const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
+            
+            if (!(templateFile instanceof TFile)) {
+                new Notice("Template file 'Have you seen this popup?.md' not found.");
+                return;
+            }
+            
+            // Read the template content
+            const templateContent = await this.app.vault.read(templateFile);
+            
+            // Create a copy with timestamp
+            const seenFolderPath = "SeenMessages";
+            const currentMessageTitle = message.title.replace(/[/\\?%*:|"<>]/g, '-'); // sanitize title for filename
+            const newPath = `${seenFolderPath}/${currentMessageTitle}.md`;
+            
+            // Create the SeenMessages folder if it doesn't exist
+            const seenFolder = this.app.vault.getAbstractFileByPath(seenFolderPath);
+            if (!seenFolder) {
+                await this.app.vault.createFolder(seenFolderPath);
+            }
+            
+            const seenFile = this.app.vault.getAbstractFileByPath(newPath);
+            if (!seenFile) {
+                // Add a link to the current message at the beginning of the template
+                const linkToMessage = `Link to message: [[${message.path}|${message.title}]]\n\n`;
+                const fileContent = linkToMessage + templateContent;
+                
+                // Create the copy of the template
+                await this.app.vault.create(newPath, fileContent);
+            }
+
+            if (seenFile instanceof TFile) {
+                this.app.workspace.getLeaf().openFile(seenFile);
+            }
+        };
     }
 }
 
@@ -191,6 +270,8 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         DEFAULT_SETTINGS,
         settings?.popupWindow || {}
     );
+
+    const OLD_POPUPS_FOLDER = "Old Popups";
 
     // Helper function to load messages
     const loadMessages = async (): Promise<PinnedMessage[]> => {
@@ -208,6 +289,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
                 title: file.basename,
                 content,
                 path: file.path,
+                fileCreated: file.stat.ctime,
             });
         }
 
@@ -215,8 +297,92 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
         return messages;
     };
 
+    // Helper function to delete expired messages
+    const deleteExpiredMessages = async () => {
+        if (!popupSettings.autoDeleteEnabled) {
+            return;
+        }
+
+        const folderPath = popupSettings.messagesFolder.replace(/\/+$/, "");
+        const allMarkdown = plugin.app.vault.getMarkdownFiles();
+        const files = allMarkdown.filter((file) =>
+            file.path.startsWith(folderPath + "/")
+        );
+
+        const now = Date.now();
+        const expirationTime = popupSettings.autoDeleteHours * 60 * 60 * 1000; // Convert hours to milliseconds
+        let movedCount = 0;
+
+        for (const file of files) {
+            const age = now - file.stat.ctime;
+            if (age > expirationTime) {
+                // Ensure Old Popups folder exists
+                const oldFolder = plugin.app.vault.getAbstractFileByPath(OLD_POPUPS_FOLDER);
+                if (!oldFolder) {
+                    await plugin.app.vault.createFolder(OLD_POPUPS_FOLDER);
+                }
+
+                // Move the file to Old Popups
+                const newPath = `${OLD_POPUPS_FOLDER}/${file.basename}.md`;
+                await plugin.app.vault.rename(file, newPath);
+
+                // Append a marker to update mtime and record when it was moved
+                const movedAt = new Date().toLocaleString();
+                const movedNotice = `\n\n> Moved to Old Popups on ${movedAt}`;
+                const movedFile = plugin.app.vault.getAbstractFileByPath(newPath);
+                if (movedFile instanceof TFile) {
+                    const current = await plugin.app.vault.read(movedFile);
+                    const autoDeleteOn = new Date(Date.now() + ((popupSettings.oldPopupsRetentionDays ?? 14) * 24 * 60 * 60 * 1000)).toLocaleString();
+                    const headerLine = `> This popup will be auto-deleted on ${autoDeleteOn}`;
+                    const updated = `${headerLine}\n\n${current}${movedNotice}`;
+                    await plugin.app.vault.modify(movedFile, updated);
+                }
+
+                // Optionally remove paired SeenMessages copy to reduce clutter
+                const seenFile = plugin.app.vault.getAbstractFileByPath(`SeenMessages/${file.basename}.md`);
+                if (seenFile instanceof TFile) {
+                    await plugin.app.vault.delete(seenFile);
+                }
+
+                movedCount++;
+            }
+        }
+
+        if (movedCount > 0) {
+            new Notice(`Moved ${movedCount} expired message(s) to Old Popups`);
+        }
+    };
+
+    // Helper function to delete old popups after two weeks
+    const deleteOldPopups = async () => {
+        const retentionMs = (popupSettings.oldPopupsRetentionDays ?? 14) * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const oldFolder = plugin.app.vault.getAbstractFileByPath(OLD_POPUPS_FOLDER);
+        if (!oldFolder) return;
+
+        const allMarkdown = plugin.app.vault.getMarkdownFiles();
+        const files = allMarkdown.filter((file) => file.path.startsWith(`${OLD_POPUPS_FOLDER}/`));
+
+        let deletedCount = 0;
+        for (const file of files) {
+            const ageSinceModify = now - file.stat.mtime;
+            if (ageSinceModify > retentionMs) {
+                await plugin.app.vault.delete(file);
+                deletedCount++;
+            }
+        }
+
+        if (deletedCount > 0) {
+            new Notice(`Auto-deleted ${deletedCount} old popup(s)`);
+        }
+    };
+
     // Helper function to show messages
     const showMessages = async () => {
+    // Clean up expired messages before showing
+    await deleteExpiredMessages();
+    await deleteOldPopups();
+        
         const messages = await loadMessages();
 
         if (messages.length === 0) {
@@ -224,7 +390,7 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
             return;
         }
 
-        new PinnedMessagesModal(plugin.app, messages).open();
+        new PinnedMessagesModal(plugin.app, messages, popupSettings.autoDeleteHours).open();
     };
 
     // Add command to open pinned messages
@@ -240,6 +406,12 @@ export function initializePopupWindow(plugin: Plugin, settings?: any, saveSettin
     if (popupSettings.showOnStartup) {
         plugin.app.workspace.onLayoutReady(() => {
             showMessages();
+        });
+    } else if (popupSettings.autoDeleteEnabled) {
+        // Even if not showing on startup, still clean up expired messages
+        plugin.app.workspace.onLayoutReady(() => {
+            deleteExpiredMessages();
+            deleteOldPopups();
         });
     }
 }
