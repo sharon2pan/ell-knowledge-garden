@@ -4,6 +4,8 @@ import {
 	Notice,
 	Plugin,
 	TFile,
+	MarkdownRenderer, 
+	Component,
 } from "obsidian";
 
 interface PinnedMessagesSettings {
@@ -137,50 +139,59 @@ class PinnedMessagesModal extends Modal {
 		this.renderMessage(contentEl);
 	}
 
-	private renderMessage(container: HTMLElement) {
-		container.empty();
+	private async renderMessage(container: HTMLElement) {
+	container.empty();
 
-		const message = this.messages[this.index];
-		// title
-		const header = container.createDiv({ cls: "pinned-message-header" });
-		header.createEl("h3", {
-			text: `${this.index + 1} / ${this.messages.length}: ${message.title}`,
-		});
+	const message = this.messages[this.index];
 
-		// body
-		const body = container.createDiv({ cls: "pinned-message-body" });
-		body.createEl("pre", { text: message.content });
+	// body (render markdown so [[links]] work)
+	const body = container.createDiv({ cls: "pinned-message-body" });
 
-		// controls container
-		const controls = container.createDiv({ cls: "pinned-message-controls" });
+	// create a small Component just for markdown rendering
+	const mdComponent = new Component();
 
-		// previous button
-		const prevButton = controls.createEl("button", { text: "← Previous" });
-		prevButton.onclick = () => {
-			if (this.index > 0) {
-				this.index--;
-				this.renderMessage(container);
-			}
-		};	
-		
-		// next button
-		const nextButton = controls.createEl("button", { text: "Next →" });
-		nextButton.disabled = this.index === this.messages.length - 1;
-		nextButton.onclick = () => {
+	// decided to use markdown renderer so we can have links in the actual note
+	await MarkdownRenderer.render(
+		this.app,
+		message.content,   // markdown text
+		body,              // container element
+		message.path,      // source path so [[links]] resolve correctly
+		mdComponent        // component context for event handling
+	);
+
+	// controls container
+	const controls = container.createDiv({ cls: "pinned-message-controls" });
+
+	// previous button
+	const prevButton = controls.createEl("button", { text: "← Previous" });
+	prevButton.onclick = () => {
+		if (this.index > 0) {
+			this.index--;
+			this.renderMessage(container);
+		}
+	};
+
+	// next button
+	const nextButton = controls.createEl("button", { text: "Next →" });
+	nextButton.disabled = this.index === this.messages.length - 1;
+	nextButton.onclick = () => {
+		if (this.index < this.messages.length - 1) {
 			this.index++;
 			this.renderMessage(container);
-		};
+		}
+	};
 
-		// open button
-		const openButton = controls.createEl("button", { text: "Open Message" });
-		openButton.onclick = () => {
-			const file = this.app.vault.getAbstractFileByPath(message.path);
-			if (file instanceof TFile) {
-				this.app.workspace.getLeaf().openFile(file);
-			}
-		};
+	// open button
+	const openButton = controls.createEl("button", { text: "Open Message" });
+	openButton.onclick = () => {
+		const file = this.app.vault.getAbstractFileByPath(message.path);
+		if (file instanceof TFile) {
+			this.app.workspace.getLeaf().openFile(file);
+		}
+	};
+}
 
-	}
+
 }
 
 
