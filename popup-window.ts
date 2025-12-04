@@ -17,7 +17,7 @@ interface PinnedMessagesSettings {
 }
 
 const DEFAULT_SETTINGS: PinnedMessagesSettings = {
-    messagesFolder: "PinnedMessages",
+    messagesFolder: "LIVE Popups",
     showOnStartup: true,
     autoDeleteEnabled: true,
     autoDeleteHours: 24,
