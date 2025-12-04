@@ -6,6 +6,46 @@ interface PinNotesSettings {
 	pinnedFiles: string[];
 }
 
+// Shared storage file (within the vault) so Obsidian Sync shares pins across users
+const SHARED_PINNED_PATH = ".ell-kg/pinned-notes.json";
+
+async function readSharedPinnedFiles(plugin: Plugin): Promise<string[] | null> {
+	try {
+		const adapter = plugin.app.vault.adapter;
+		const exists = await adapter.exists(SHARED_PINNED_PATH);
+		if (!exists) return null;
+		const raw = await adapter.read(SHARED_PINNED_PATH);
+		const data = JSON.parse(raw);
+		if (Array.isArray(data)) return data as string[];
+		if (data && Array.isArray(data.pinnedFiles)) return data.pinnedFiles as string[];
+		return null;
+	} catch (e) {
+		console.error("Failed to read shared pinned notes:", e);
+		return null;
+	}
+}
+
+async function writeSharedPinnedFiles(plugin: Plugin, pinnedFiles: string[]): Promise<void> {
+	try {
+		const adapter = plugin.app.vault.adapter;
+		// Ensure folder exists
+		const parts = SHARED_PINNED_PATH.split("/");
+		parts.pop();
+		const folderPath = parts.join("/");
+		if (folderPath) {
+			const folderExists = await adapter.exists(folderPath);
+			if (!folderExists) {
+				await adapter.mkdir(folderPath);
+			}
+		}
+		const payload = JSON.stringify({ pinnedFiles }, null, 2);
+		await adapter.write(SHARED_PINNED_PATH, payload);
+	} catch (e) {
+		console.error("Failed to write shared pinned notes:", e);
+		new Notice("Could not save shared pinned notes");
+	}
+}
+
 class PinnedNotesView extends ItemView {
 	plugin: Plugin;
 	settings: PinNotesSettings;
@@ -148,11 +188,22 @@ export function initializePinnedNotes(plugin: Plugin, settings: any, saveSetting
 		settings.pinnedFiles = [];
 	}
 
+	// Try to load shared pinned files from vault so everyone sees the same pins
+	plugin.registerInterval(window.setTimeout(async () => {
+		const sharedPins = await readSharedPinnedFiles(plugin);
+		if (sharedPins && Array.isArray(sharedPins)) {
+			settings.pinnedFiles = sharedPins;
+			await saveSettings();
+			refreshPinnedNotesView(plugin);
+		}
+	}, 0));
+
 	// Register the view
 	plugin.registerView(
 		VIEW_TYPE_PINNED_NOTES,
 		(leaf) => new PinnedNotesView(leaf, plugin, settings, async () => {
 			await saveSettings();
+			await writeSharedPinnedFiles(plugin, settings.pinnedFiles);
 			refreshPinnedNotesView(plugin);
 		})
 	);
@@ -253,6 +304,7 @@ async function togglePin(plugin: Plugin, settings: PinNotesSettings, filePath: s
 	}
 	
 	await saveSettings();
+	await writeSharedPinnedFiles(plugin, settings.pinnedFiles);
 	refreshPinnedNotesView(plugin);
 }
 
